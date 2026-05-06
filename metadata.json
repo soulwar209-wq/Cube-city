@@ -1,0 +1,6 @@
+{
+  "name": "Cube Island",
+  "description": "A voxel-based 3D island explorer featuring a house and a lighthouse.",
+  "requestFramePermissions": [],
+  "majorCapabilities": []
+}
