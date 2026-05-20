@@ -30,13 +30,6 @@ export const Player = forwardRef<THREE.Group, PlayerProps>(({ position, targetPo
 
   useFrame((state, delta) => {
     if (!meshRef.current) return;
-    
-    // Log occasionally to debug
-    if (state.clock.elapsedTime % 2 < 0.05) {
-      console.log('Player Position:', pos.toArray());
-      console.log('Target Position:', targetPosition);
-    }
-
     // Cap delta to avoid large leaps during lag spikes
     const safeDelta = Math.min(delta, 0.04);
 

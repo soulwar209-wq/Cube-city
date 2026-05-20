@@ -1,13 +1,14 @@
 import * as THREE from 'three';
+import { memo } from 'react';
 
-function VoxelBlock({ position, color = "#555", onClick }: { position: [number, number, number], color?: string, onClick?: () => void }) {
+const VoxelBlock = memo(({ position, color = "#555", onClick }: { position: [number, number, number], color?: string, onClick?: () => void }) => {
   return (
     <mesh position={position} castShadow receiveShadow onClick={(e) => { e.stopPropagation(); onClick?.(); }}>
       <boxGeometry args={[1, 1, 1]} />
       <meshStandardMaterial color={color} roughness={0.8} />
     </mesh>
   );
-}
+});
 
 function Chair({ position }: { position: [number, number, number] }) {
   return (

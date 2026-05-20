@@ -118,34 +118,10 @@ export function Island({ onGroundClick }: { onGroundClick?: (x: number, y: numbe
   const offset = size / 2;
   const waterLevel = 0; // Surface level
 
+  const dummy = useMemo(() => new THREE.Object3D(), []);
+
   useFrame((state) => {
-    if (!grassRef.current) return;
-    const time = state.clock.getElapsedTime();
-    const dummy = new THREE.Object3D();
-    
-    features.grass.forEach((g, i) => {
-      const timeOffset = g.pos[0] * 0.5 + g.pos[2] * 0.5;
-      const sway = Math.sin(time * 1.2 + timeOffset) * 0.05; // Subtle sway
-      
-      for (let j = 0; j < 3; j++) {
-        const idx = i * 3 + j;
-        const offset = [[0.08, 0, 0], [-0.05, 0, 0.06], [-0.03, 0, -0.05]][j];
-        const hScale = g.scale * (0.7 + j * 0.15);
-        
-        dummy.position.set(
-          g.pos[0] + offset[0],
-          g.pos[1] + hScale / 2,
-          g.pos[2] + offset[2]
-        );
-        
-        // Purely vertical or slightly swayed
-        dummy.rotation.set(sway, g.rot + j, 0);
-        dummy.scale.set(0.04, hScale, 0.04); // Even thinner vertical lines
-        dummy.updateMatrix();
-        grassRef.current!.setMatrixAt(idx, dummy.matrix);
-      }
-    });
-    grassRef.current.instanceMatrix.needsUpdate = true;
+    // Grass animation removed for performance
   });
 
   const { grid, totalCount, features } = useMemo(() => {
@@ -219,7 +195,7 @@ export function Island({ onGroundClick }: { onGroundClick?: (x: number, y: numbe
 
         // Grass everywhere on the island surface (h >= 0)
         if (h >= 0) {
-          const density = 3; // Reduced density
+          const density = 1; // Reduced density from 3 to 1
           for (let d = 0; d < density; d++) {
             if (Math.random() > 0.3) {
               grass.push({ 

@@ -5,6 +5,7 @@ import { Island, getVoxelHeight } from './components/Island';
 import { House } from './components/House';
 import { Lighthouse } from './components/Lighthouse';
 import { HouseInterior } from './components/HouseInterior';
+import { CaveArea } from './components/CaveArea';
 import { Player } from './components/Player';
 import { EffectComposer, Bloom, SSAO, SMAA, Vignette, BrightnessContrast, HueSaturation } from '@react-three/postprocessing';
 import * as THREE from 'three';
@@ -13,28 +14,49 @@ export default function App() {
   const controlsRef = useRef<any>(null);
   const [targetPos, setTargetPos] = useState<[number, number, number] | null>(null);
   const [inHouse, setInHouse] = useState(false);
+  const [inCave, setInCave] = useState(false);
 
   const handleIslandClick = useCallback((x: number, y: number, z: number) => {
-    if (inHouse) {
+    if (inHouse || inCave) {
       setTargetPos([x, y, z]);
     } else {
       const h = getVoxelHeight(x, z);
       setTargetPos([x, h, z]);
     }
-  }, [inHouse]);
+  }, [inHouse, inCave]);
   const playerRef = useRef<THREE.Group>(null);
-  const [canInteract, setCanInteract] = useState(false);
+  const [interactType, setInteractType] = useState<'house' | 'cave' | null>(null);
   const housePos = useMemo(() => [0, 0.5, 0] as [number, number, number], []);
   const islandPos = useMemo(() => [0, 3, 4] as [number, number, number], []);
+  const cavePos = useMemo(() => [0, 0.5, 0] as [number, number, number], []);
+
+  const toggleHouse = () => {
+    setInHouse(!inHouse);
+    setTargetPos(null);
+  };
+
+  const toggleCave = () => {
+    setInCave(!inCave);
+    setTargetPos(null);
+  };
 
   return (
     <div className="w-full h-screen bg-[#020202] overflow-hidden">
-      {canInteract && (
+      {interactType === 'house' && (
         <button 
-          className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 bg-white/10 backdrop-blur-md text-white px-6 py-3 rounded-full border border-white/20 hover:bg-white/20 transition-all font-mono"
-          onClick={() => { setInHouse(!inHouse); setTargetPos(null); }}
+          className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 bg-white/10 backdrop-blur-md text-white px-6 py-3 rounded-full border border-white/20 hover:bg-white/20 transition-all font-mono uppercase tracking-widest"
+          onClick={toggleHouse}
         >
           {inHouse ? "EXIT HOUSE" : "ENTER HOUSE"}
+        </button>
+      )}
+
+      {interactType === 'cave' && (
+        <button 
+          className="absolute bottom-10 left-1/2 -translate-x-1/2 z-20 bg-blue-500/20 backdrop-blur-md text-white px-6 py-3 rounded-full border border-blue-400/30 hover:bg-blue-500/40 transition-all font-mono uppercase tracking-widest"
+          onClick={toggleCave}
+        >
+          {inCave ? "LEAVE CAVE" : "ENTER CAVE"}
         </button>
       )}
       <div className="w-full h-full relative">
@@ -43,7 +65,9 @@ export default function App() {
           <h1 className="text-white text-3xl font-light tracking-[0.2em] opacity-80 mb-1 uppercase">Lumina Island</h1>
           <div className="flex items-center gap-3">
             <div className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
-            <p className="text-blue-400 text-[10px] font-mono tracking-widest opacity-60 uppercase">Click terrain to explore</p>
+            <p className="text-blue-400 text-[10px] font-mono tracking-widest opacity-60 uppercase">
+              {inHouse ? "Exploring House" : inCave ? "Deep in Cave" : "Exploring Lumina"}
+            </p>
           </div>
         </div>
         <main className="w-full h-full relative flex items-center justify-center overflow-hidden z-0">
@@ -64,12 +88,16 @@ export default function App() {
                 <GameController 
                   playerRef={playerRef} 
                   housePos={new THREE.Vector3(0, 3, 0)} 
+                  lakePos={new THREE.Vector3(-10, -3, 10)}
                   inHouse={inHouse}
-                  setCanInteract={setCanInteract} 
+                  inCave={inCave}
+                  setInteractType={setInteractType} 
                 />
                 
                 {inHouse ? (
                   <HouseInterior onGroundClick={handleIslandClick} />
+                ) : inCave ? (
+                  <CaveArea onGroundClick={handleIslandClick} />
                 ) : (
                   <>
                     <Sky distance={450000} sunPosition={[100, 20, 100]} inclination={0.3} azimuth={0.25} turbidity={5} rayleigh={0.5} />
@@ -103,7 +131,13 @@ export default function App() {
                   </>
                 )}
                 
-                <Player key={inHouse ? 'house' : 'island'} ref={playerRef} position={inHouse ? housePos : islandPos} targetPosition={targetPos} yOffset={inHouse ? 0.3 : 0.5} />
+                <Player 
+                  key={inHouse ? 'house' : inCave ? 'cave' : 'island'} 
+                  ref={playerRef} 
+                  position={inHouse ? housePos : inCave ? cavePos : islandPos} 
+                  targetPosition={targetPos} 
+                  yOffset={inHouse ? 0.3 : inCave ? 0.3 : 0.5} 
+                />
 
               <EffectComposer multisampling={0} enableNormalPass={false}>
                 <Bloom 
@@ -132,16 +166,29 @@ export default function App() {
 }
 
 
-function GameController({ playerRef, housePos, inHouse, setCanInteract }: any) {
+function GameController({ playerRef, housePos, lakePos, inHouse, inCave, setInteractType }: any) {
   const tempPos = useMemo(() => new THREE.Vector3(), []);
+
   useFrame(() => {
     if (playerRef.current) {
       if (inHouse) {
-        setCanInteract(true);
+        setInteractType('house');
+      } else if (inCave) {
+        setInteractType('cave');
       } else {
-        tempPos.copy(housePos);
-        const dist = playerRef.current.position.distanceTo(tempPos);
-        setCanInteract(dist < 5);
+        // Check distance to house
+        const distHouse = playerRef.current.position.distanceTo(housePos);
+        
+        // Check distance to lake
+        const distLake = playerRef.current.position.distanceTo(lakePos);
+
+        if (distHouse < 5) {
+          setInteractType('house');
+        } else if (distLake < 6) {
+          setInteractType('cave');
+        } else {
+          setInteractType(null);
+        }
       }
     }
   });
