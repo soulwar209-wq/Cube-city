@@ -114,9 +114,8 @@ export function Island({ onGroundClick }: { onGroundClick?: (x: number, y: numbe
   const meshRef = useRef<THREE.InstancedMesh>(null);
   const grassRef = useRef<THREE.InstancedMesh>(null);
   
-  const size = 5000;
+  const size = 100;
   const offset = size / 2;
-  const renderRadius = 140; // Rendered window for performance
   const waterLevel = 0; // Surface level
 
   const dummy = useMemo(() => new THREE.Object3D(), []);
@@ -125,26 +124,30 @@ export function Island({ onGroundClick }: { onGroundClick?: (x: number, y: numbe
     // Grass animation removed for performance
   });
 
-  const { grid, totalCount, features, minX, maxX, minZ, maxZ } = useMemo(() => {
-    const minX = Math.floor(offset - renderRadius);
-    const maxX = Math.floor(offset + renderRadius);
-    const minZ = Math.floor(offset - renderRadius);
-    const maxZ = Math.floor(offset + renderRadius);
-
+  const { grid, totalCount, features } = useMemo(() => {
     const grid: number[][] = [];
-    for (let x = minX; x <= maxX; x++) {
+    for (let x = 0; x < size; x++) {
       grid[x] = [];
-      for (let z = minZ; z <= maxZ; z++) {
+      for (let z = 0; z < size; z++) {
         grid[x][z] = getVoxelHeight(x - offset, z - offset);
       }
     }
 
     let groundCount = 0;
-    for (let x = minX; x <= maxX; x++) {
-      for (let z = minZ; z <= maxZ; z++) {
+    for (let x = 0; x < size; x++) {
+      for (let z = 0; z < size; z++) {
         const h = grid[x][z];
+        // Ground voxels
         for (let y = -4; y <= h; y++) {
-          groundCount++;
+          const isAtBound = x === 0 || x === size - 1 || z === 0 || z === size - 1 || y === -4 || y === h;
+          if (isAtBound) {
+            groundCount++;
+          } else {
+            const neighborsClosed = grid[x+1][z] >= y && grid[x-1][z] >= y && 
+                                    grid[x][z+1] >= y && grid[x][z-1] >= y &&
+                                    y < grid[x][z];
+            if (!neighborsClosed) groundCount++;
+          }
         }
       }
     }
@@ -153,97 +156,61 @@ export function Island({ onGroundClick }: { onGroundClick?: (x: number, y: numbe
     const rocks: { pos: [number, number, number], scale: [number, number, number] }[] = [];
     const flowers: { pos: [number, number, number], color: string }[] = [];
     const grass: { pos: [number, number, number], scale: number, rot: number }[] = [];
-    const city: { pos: [number, number, number], scale: [number, number, number], color: string }[] = [];
-    const roads: [number, number, number][] = [];
-    const npcs: { pos: [number, number, number], color: string }[] = [];
-    const guards: [number, number, number][] = [];
-    const stairs: [number, number, number][] = [];
-    const biomeFauna: { pos: [number, number, number], kind: 'wolf'|'yak'|'scorpion'|'boar'|'drake', color: string }[] = [];
-    const biomeFlora: { pos: [number, number, number], color: string, scale: number }[] = [];
-
+    
     const flowerColors = ['#ff5252', '#ff4081', '#e040fb', '#7c4dff', '#ffff00'];
 
-    for (let x = minX + 5; x < maxX - 5; x++) {
-      for (let z = minZ + 5; z < maxZ - 5; z++) {
+    for (let x = 5; x < size - 5; x++) {
+      for (let z = 5; z < size - 5; z++) {
         const h = grid[x][z];
         const posX = x - offset;
         const posZ = z - offset;
+
+        const dist = Math.sqrt(posX * posX + posZ * posZ);
+        if (dist > 48) continue;
 
         const rf = Math.random();
         const jX = (Math.random() - 0.5) * 0.7;
         const jZ = (Math.random() - 0.5) * 0.7;
 
-        const cityZone = Math.abs(posX) < 500 && Math.abs(posZ) < 500; // 1000x1000 city
-        const castleZone = Math.abs(posX) < 80 && Math.abs(posZ) < 80;
+        // Tree/Rock/Flower exclusions (on high land and not in central spots)
+        const isHighLand = h >= 2;
+        const isExcludedZone = (Math.abs(posX) < 8 && Math.abs(posZ) < 8) || (Math.abs(posX - 15) < 8 && Math.abs(posZ - 15) < 8);
 
-        if (cityZone && h >= 0) {
-          const roadLine = Math.abs(posX % 40) < 2 || Math.abs(posZ % 40) < 2;
-          if (roadLine) roads.push([posX, h + 0.52, posZ]);
-
-          if (castleZone) {
-            const tier = Math.max(Math.abs(posX), Math.abs(posZ));
-            if (tier > 55 && tier < 70 && Math.abs(posX % 6) < 1.2) stairs.push([posX, h + 0.5, posZ]);
-            if (rf < 0.15) {
-              const hScale = 4 + Math.random() * 6;
-              city.push({ pos: [posX + jX, h + hScale / 2 + 0.5, posZ + jZ], scale: [2.2, hScale, 2.2], color: '#9ca3af' });
-            }
-            if (Math.abs(posX) < 20 && Math.abs(posZ) < 20 && rf < 0.22) {
-              city.push({ pos: [posX + jX, h + 6, posZ + jZ], scale: [3.5, 12, 3.5], color: '#6b7280' });
-            }
-            if (rf < 0.02) guards.push([posX + jX, h + 0.8, posZ + jZ]);
-            continue;
-          }
-
-          if (!roadLine && rf < 0.08) {
-            const houseType = Math.random();
-            const hScale = 1.2 + Math.random() * 3.5;
-            const baseScale: [number, number, number] = houseType < 0.33 ? [1.6, hScale, 1.4] : houseType < 0.66 ? [1.2, hScale + 1, 1.8] : [2.1, hScale * 0.8, 1.2];
-            const palette = houseType < 0.33 ? '#c08457' : houseType < 0.66 ? '#a16207' : '#7c2d12';
-            city.push({ pos: [posX + jX, h + baseScale[1] / 2 + 0.5, posZ + jZ], scale: baseScale, color: palette });
-          }
-          if (rf >= 0.08 && rf < 0.095) {
-            city.push({ pos: [posX + jX, h + 1.2, posZ + jZ], scale: [1.8, 2.4, 1.8], color: '#2563eb' }); // shops
-          }
-          if (rf >= 0.095 && rf < 0.11) npcs.push({ pos: [posX + jX, h + 0.8, posZ + jZ], color: ['#22c55e', '#eab308', '#ec4899'][Math.floor(Math.random()*3)] });
-          if (rf >= 0.11 && rf < 0.118) guards.push([posX + jX, h + 0.8, posZ + jZ]);
-          continue;
-        }
-
-        const biome = posX < -120 ? 'snow' : posX > 120 ? 'desert' : posZ > 120 ? 'forest' : posZ < -120 ? 'volcanic' : 'temperate';
-        if (h >= 0) {
-          if (biome === 'snow' && rf < 0.012) biomeFauna.push({ pos: [posX + jX, h + 0.7, posZ + jZ], kind: 'yak', color: '#e2e8f0' });
-          if (biome === 'desert' && rf < 0.012) biomeFauna.push({ pos: [posX + jX, h + 0.6, posZ + jZ], kind: 'scorpion', color: '#f59e0b' });
-          if (biome === 'forest' && rf < 0.014) biomeFauna.push({ pos: [posX + jX, h + 0.7, posZ + jZ], kind: 'boar', color: '#854d0e' });
-          if (biome === 'volcanic' && rf < 0.01) biomeFauna.push({ pos: [posX + jX, h + 0.8, posZ + jZ], kind: 'drake', color: '#ef4444' });
-          if (biome === 'temperate' && rf < 0.014) biomeFauna.push({ pos: [posX + jX, h + 0.7, posZ + jZ], kind: 'wolf', color: '#9ca3af' });
-
-          if (biome === 'snow' && rf > 0.2 && rf < 0.24) biomeFlora.push({ pos: [posX + jX, h + 0.55, posZ + jZ], color: '#bae6fd', scale: 0.6 });
-          if (biome === 'desert' && rf > 0.24 && rf < 0.28) biomeFlora.push({ pos: [posX + jX, h + 0.55, posZ + jZ], color: '#facc15', scale: 0.55 });
-          if (biome === 'forest' && rf > 0.28 && rf < 0.33) biomeFlora.push({ pos: [posX + jX, h + 0.55, posZ + jZ], color: '#4ade80', scale: 0.75 });
-          if (biome === 'volcanic' && rf > 0.33 && rf < 0.37) biomeFlora.push({ pos: [posX + jX, h + 0.55, posZ + jZ], color: '#fb7185', scale: 0.65 });
-          if (biome === 'temperate' && rf > 0.37 && rf < 0.42) biomeFlora.push({ pos: [posX + jX, h + 0.55, posZ + jZ], color: '#a7f3d0', scale: 0.7 });
-        }
-
-        if (h >= 2) {
-          if (rf < 0.01) trees.push([posX + jX, h + 0.5, posZ + jZ]);
-          else if (rf < 0.016) {
+        if (isHighLand && !isExcludedZone) {
+          if (rf < 0.005) {
+            trees.push([posX + jX, h + 0.5, posZ + jZ]);
+          } else if (rf < 0.008) {
             const s = 0.5 + Math.random() * 0.9;
             rocks.push({ pos: [posX + jX, h + 0.5 * s + 0.5, posZ + jZ], scale: [s, s, s] });
           }
         }
 
-        if (h >= 0 && rf >= 0.016 && rf < 0.05) {
-          flowers.push({ pos: [posX + jX, h + 0.5, posZ + jZ], color: flowerColors[Math.floor(Math.random() * flowerColors.length)] });
+        // Flowers spread across the island where h >= 0
+        if (h >= 0 && rf >= 0.008 && rf < 0.04) {
+          flowers.push({ 
+            pos: [posX + jX, h + 0.5, posZ + jZ], 
+            color: flowerColors[Math.floor(Math.random() * flowerColors.length)] 
+          });
         }
 
-        if (h >= 0 && Math.random() > 0.4) {
-          grass.push({ pos: [posX + (Math.random() - 0.5) * 0.9, h + 0.5, posZ + (Math.random() - 0.5) * 0.9], scale: 0.3 + Math.random() * 0.4, rot: Math.random() * Math.PI });
+        // Grass everywhere on the island surface (h >= 0)
+        if (h >= 0) {
+          const density = 1; // Reduced density from 3 to 1
+          for (let d = 0; d < density; d++) {
+            if (Math.random() > 0.3) {
+              grass.push({ 
+                pos: [posX + (Math.random() - 0.5) * 0.9, h + 0.5, posZ + (Math.random() - 0.5) * 0.9],
+                scale: 0.3 + Math.random() * 0.4, // Slightly larger
+                rot: Math.random() * Math.PI
+              });
+            }
+          }
         }
       }
     }
 
-    return { grid, totalCount: groundCount, features: { trees, rocks, flowers, grass, city, roads, npcs, guards, stairs, biomeFauna, biomeFlora }, minX, maxX, minZ, maxZ };
-  }, [size, offset, renderRadius]);
+    return { grid, totalCount: groundCount, features: { trees, rocks, flowers, grass } };
+  }, [size, offset]);
 
   useLayoutEffect(() => {
     if (!meshRef.current || !grassRef.current) return;
@@ -252,8 +219,8 @@ export function Island({ onGroundClick }: { onGroundClick?: (x: number, y: numbe
     const color = new THREE.Color();
     let idx = 0;
 
-    for (let x = minX; x <= maxX; x++) {
-      for (let z = minZ; z <= maxZ; z++) {
+    for (let x = 0; x < size; x++) {
+      for (let z = 0; z < size; z++) {
         const h = grid[x][z];
         const posX = x - offset;
         const posZ = z - offset;
@@ -262,7 +229,7 @@ export function Island({ onGroundClick }: { onGroundClick?: (x: number, y: numbe
 
         // Ground voxels
         for (let y = -4; y <= h; y++) {
-          const isAtBound = x === minX || x === maxX || z === minZ || z === maxZ || y === -4 || y === h;
+          const isAtBound = x === 0 || x === size - 1 || z === 0 || z === size - 1 || y === -4 || y === h;
           let visible = isAtBound;
           if (!visible) {
             visible = !(grid[x+1][z] >= y && grid[x-1][z] >= y && grid[x][z+1] >= y && grid[x][z-1] >= y && y < grid[x][z]);
@@ -374,13 +341,6 @@ export function Island({ onGroundClick }: { onGroundClick?: (x: number, y: numbe
       {features.trees.map((p, i) => <Tree key={`t-${i}`} position={p} />)}
       {features.rocks.map((r, i) => <Rock key={`r-${i}`} position={r.pos} scale={r.scale} />)}
       {features.flowers.map((f, i) => <Flower key={`f-${i}`} position={f.pos} color={f.color} />)}
-      {features.roads?.map((r, i) => <mesh key={`road-${i}`} position={r} receiveShadow><boxGeometry args={[1, 0.08, 1]} /><meshStandardMaterial color="#374151" /></mesh>)}
-      {features.city?.map((b, i) => <mesh key={`city-${i}`} position={b.pos} scale={b.scale} castShadow receiveShadow><boxGeometry args={[1, 1, 1]} /><meshStandardMaterial color={b.color} roughness={0.85} /></mesh>)}
-      {features.npcs?.map((n, i) => <mesh key={`npc-${i}`} position={n.pos} castShadow><capsuleGeometry args={[0.2, 0.55, 4, 8]} /><meshStandardMaterial color={n.color} emissive={n.color} emissiveIntensity={0.25} /></mesh>)}
-      {features.guards?.map((g, i) => <group key={`guard-${i}`} position={g}><mesh castShadow><capsuleGeometry args={[0.22, 0.65, 4, 8]} /><meshStandardMaterial color="#111827" /></mesh><mesh position={[0.2,0.6,0.2]}><boxGeometry args={[0.1,0.8,0.1]} /><meshStandardMaterial color="#94a3b8" /></mesh></group>)}
-      {features.stairs?.map((st, i) => <mesh key={`stairs-${i}`} position={st} receiveShadow castShadow><boxGeometry args={[1,0.3,1]} /><meshStandardMaterial color="#9ca3af" /></mesh>)}
-      {features.biomeFlora?.map((f, i) => <mesh key={`flora-${i}`} position={f.pos} castShadow><coneGeometry args={[0.18 * f.scale, 0.65 * f.scale, 6]} /><meshStandardMaterial color={f.color} emissive={f.color} emissiveIntensity={0.15} /></mesh>)}
-      {features.biomeFauna?.map((a, i) => <group key={`fauna-${i}`} position={a.pos}><mesh castShadow><capsuleGeometry args={[0.18, 0.45, 4, 8]} /><meshStandardMaterial color={a.color} emissive={a.kind === 'drake' ? a.color : '#000000'} emissiveIntensity={a.kind === 'drake' ? 0.35 : 0} /></mesh><mesh position={[0.22,0.25,0.1]}><sphereGeometry args={[0.08,8,8]} /><meshStandardMaterial color={a.color} /></mesh></group>)}
     </group>
   );
 }
