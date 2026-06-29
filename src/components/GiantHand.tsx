@@ -23,11 +23,11 @@ export function GiantHand({ active, onGrab }: { active: boolean, onGrab: () => v
     // 3-6s: Pull down and move away
     
     if (t < 2) {
-      groupRef.current.position.y = 20 - t * 8;
+      groupRef.current.position.y = 25 - t * 6; // Start higher, descend to ~13
     } else if (t < 3) {
       // Grabbing action: 1 second grab
       if (handRef.current) handRef.current.rotation.z = Math.sin((t - 2) * Math.PI) * -0.5;
-      if (t > 2.8) onGrab();
+      if (t > 2.5) onGrab();
     } else {
       // Pull and break animation: use delta for smooth movement
       const moveSpeed = delta * 5;

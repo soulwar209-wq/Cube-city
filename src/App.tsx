@@ -4,17 +4,25 @@ import { Suspense, useRef, useState, useCallback, useMemo } from 'react';
 import { Island, getVoxelHeight } from './components/Island';
 import { House } from './components/House';
 import { Lighthouse } from './components/Lighthouse';
+import { DestroyedLighthouse } from './components/DestroyedLighthouse';
+import { GiantHand } from './components/GiantHand';
 import { HouseInterior } from './components/HouseInterior';
 import { CaveArea } from './components/CaveArea';
 import { Player } from './components/Player';
 import { EffectComposer, Bloom, SSAO, SMAA, Vignette, BrightnessContrast, HueSaturation } from '@react-three/postprocessing';
 import * as THREE from 'three';
 
+const HOUSE_POS_VEC = new THREE.Vector3(0, 3, 0);
+const LAKE_POS_VEC = new THREE.Vector3(-10, -3, 10);
+const LIGHTHOUSE_POS_VEC = new THREE.Vector3(15, 3, 15);
+
 export default function App() {
   const controlsRef = useRef<any>(null);
   const [targetPos, setTargetPos] = useState<[number, number, number] | null>(null);
   const [inHouse, setInHouse] = useState(false);
   const [inCave, setInCave] = useState(false);
+  const [isLighthouseDestroyed, setIsLighthouseDestroyed] = useState(false);
+  const [isHandEventActive, setIsHandEventActive] = useState(false);
 
   const handleIslandClick = useCallback((x: number, y: number, z: number) => {
     if (inHouse || inCave) {
@@ -87,11 +95,15 @@ export default function App() {
             <Suspense fallback={null}>
                 <GameController 
                   playerRef={playerRef} 
-                  housePos={new THREE.Vector3(0, 3, 0)} 
-                  lakePos={new THREE.Vector3(-10, -3, 10)}
+                  housePos={HOUSE_POS_VEC}
+                  lakePos={LAKE_POS_VEC}
+                  lighthousePos={LIGHTHOUSE_POS_VEC}
                   inHouse={inHouse}
                   inCave={inCave}
-                  setInteractType={setInteractType} 
+                  setInteractType={setInteractType}
+                  isLighthouseDestroyed={isLighthouseDestroyed}
+                  isHandEventActive={isHandEventActive}
+                  setIsHandEventActive={setIsHandEventActive}
                 />
                 
                 {inHouse ? (
@@ -115,7 +127,17 @@ export default function App() {
                     
                     <Island onGroundClick={handleIslandClick} />
                     <House position={[0, 3, 0]} />
-                    <Lighthouse position={[15, 3, 15]} />
+
+                    {isLighthouseDestroyed ? (
+                      <DestroyedLighthouse position={[15, 3, 15]} />
+                    ) : (
+                      <Lighthouse position={[15, 3, 15]} />
+                    )}
+
+                    <GiantHand
+                      active={isHandEventActive}
+                      onGrab={() => setIsLighthouseDestroyed(true)}
+                    />
                     
                     {targetPos && (
                       <group position={[targetPos[0], targetPos[1] + 0.55, targetPos[2]]}>
@@ -166,9 +188,31 @@ export default function App() {
 }
 
 
-function GameController({ playerRef, housePos, lakePos, inHouse, inCave, setInteractType }: any) {
-  const tempPos = useMemo(() => new THREE.Vector3(), []);
+interface GameControllerProps {
+  playerRef: React.RefObject<THREE.Group | null>;
+  housePos: THREE.Vector3;
+  lakePos: THREE.Vector3;
+  lighthousePos: THREE.Vector3;
+  inHouse: boolean;
+  inCave: boolean;
+  setInteractType: (type: 'house' | 'cave' | null) => void;
+  isLighthouseDestroyed: boolean;
+  isHandEventActive: boolean;
+  setIsHandEventActive: (active: boolean) => void;
+}
 
+function GameController({
+  playerRef,
+  housePos,
+  lakePos,
+  lighthousePos,
+  inHouse,
+  inCave,
+  setInteractType,
+  isLighthouseDestroyed,
+  isHandEventActive,
+  setIsHandEventActive
+}: GameControllerProps) {
   useFrame(() => {
     if (playerRef.current) {
       if (inHouse) {
@@ -181,6 +225,13 @@ function GameController({ playerRef, housePos, lakePos, inHouse, inCave, setInte
         
         // Check distance to lake
         const distLake = playerRef.current.position.distanceTo(lakePos);
+
+        // Check distance to lighthouse for the event
+        const distLighthouse = playerRef.current.position.distanceTo(lighthousePos);
+
+        if (distLighthouse < 8 && !isLighthouseDestroyed && !isHandEventActive) {
+          setIsHandEventActive(true);
+        }
 
         if (distHouse < 5) {
           setInteractType('house');
